@@ -1,28 +1,83 @@
 #include <QApplication>
 #include <QDebug>
+#include <QEvent>
 #include <QFileDialog>
 #include <QGuiApplication>
 #include <QLabel>
 #include <QLayout>
 #include <QMainWindow>
+#include <QMenu>
+#include <QMouseEvent>
+#include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
 #include <QScreen>
 #include <QScrollArea>
+
+class ImageScaleLabel : public QLabel {
+  Q_OBJECT
+
+public:
+  ImageScaleLabel(QWidget *parent = nullptr)
+      : ImageScaleLabel("ImageScaleLabel", parent) {}
+
+  ImageScaleLabel(const QString &text, QWidget *parent = nullptr)
+      : QLabel(text, parent) {
+    this->setScaledContents(true);
+  }
+
+protected:
+  void mousePressEvent(QMouseEvent *e) override final {
+    if (e->button() == Qt::RightButton) {
+      selection_rect_ = {};
+      repaint();
+      if (selection_rect_.contains(e->pos()))
+        context_menu_.exec(this->mapToGlobal(e->pos()));
+    } else {
+      selection_started_ = true;
+      selection_rect_.setTopLeft(e->pos());
+      selection_rect_.setBottomRight(e->pos());
+    }
+  }
+
+  void paintEvent(QPaintEvent *e) override final {
+    QLabel::paintEvent(e);
+    QPainter painter(this);
+    painter.setPen(QPen(QBrush(QColor(0, 0, 0, 180)), 1, Qt::DashLine));
+    painter.setBrush(QBrush(QColor(255, 255, 255, 120)));
+
+    painter.drawRect(selection_rect_);
+  }
+
+  void mouseMoveEvent(QMouseEvent *e) override final {
+    if (selection_started_) {
+      selection_rect_.setBottomRight(e->pos());
+      repaint();
+    }
+  }
+  void mouseReleaseEvent(QMouseEvent *) override final {
+    selection_started_ = false;
+    //    this->setPixmap(this->pixmap()->copy(selection_rect_));
+  }
+
+private:
+  bool selection_started_{false};
+  QRect selection_rect_{};
+  QMenu context_menu_{};
+};
 
 class ImageViewer : public QMainWindow {
   Q_OBJECT
 
 public:
   ImageViewer(QWidget *parent = nullptr) : QMainWindow(parent) {
-    image_label_->setScaledContents(true);
-
-    layout_main_->addWidget(image_label_);
+    layout_main_->addWidget(image_scale_label_);
 
     layout_buttons_->addWidget(select_file_button_);
     layout_buttons_->addWidget(zoom_in_button_);
     layout_buttons_->addWidget(zoom_out_button_);
     layout_buttons_->addWidget(zoom_reset_button_);
+    //    layout_buttons_->addWidget(new ImageScaleLabel);
 
     layout_main_->addLayout(layout_buttons_);
     main_widget_->setLayout(layout_main_);
@@ -47,9 +102,8 @@ private:
   QHBoxLayout *layout_main_{new QHBoxLayout};
   QVBoxLayout *layout_buttons_{new QVBoxLayout};
   QImage image_{};
-  QLabel *image_label_{new QLabel("图片区域")};
+  ImageScaleLabel *image_scale_label_{new ImageScaleLabel("图片区域")};
 
-  //  QScrollArea *scroll_area{new QScrollArea};
   double scale_factor_{1.0};
 
   QPushButton *select_file_button_{new QPushButton("选择文件")};
@@ -59,12 +113,13 @@ private:
 
   void showImage(QString fileName) {
     this->image_.load(fileName);
-    this->image_label_->setPixmap(QPixmap::fromImage(this->image_));
+    this->image_scale_label_->setPixmap(QPixmap::fromImage(this->image_));
   }
 
   void scaleImage(double scale_factor) {
     scale_factor_ *= scale_factor;
-    image_label_->resize(scale_factor_ * image_label_->pixmap()->size());
+    image_scale_label_->resize(scale_factor_ *
+                               image_scale_label_->pixmap()->size());
   }
 
 private slots:
