@@ -96,7 +96,7 @@ private:
   void scaleImage(double scale_factor) {
     scale_factor_ *= scale_factor;
     qDebug() << "zoom level:" << scale_factor_;
-    resize(scale_factor_ * this->pixmap()->size());
+    resize(scale_factor_ * this->pixmap(Qt::ReturnByValue).size());
   }
 
   void zoomToRectangle(QRect &target_rectangle) {
